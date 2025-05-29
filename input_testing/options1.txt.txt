@@ -1,0 +1,4 @@
+sistema: metric
+temp: C  
+porciones: 4
+filtra: all
