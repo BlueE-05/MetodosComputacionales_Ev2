@@ -31,6 +31,7 @@
       "<head>"
       "\t<link href=\"https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible&display=swap\" rel=\"stylesheet\">"
       "\t<meta charset=\"UTF-8\">"
+      "\t<link rel=\"icon\" href=\"https://cdn-icons-png.flaticon.com/512/3183/3183463.png\" type=\"image/png\">"
       (str "\t<title>" title "</title>")
       "\t<link rel=\"stylesheet\" href=\"style.css\">"
       "</head>"
@@ -57,9 +58,9 @@
 ; --función para formatear los tokens de metadata a divs HTML--
 (defn token->div [[label value]]
   (cond
-    (= label "category") (format "\t\t\t<div><strong>Category:</strong>%s</div>" value)
-    (= label "prep-time") (format "\t\t\t<div><strong>Prep Time:</strong>%s</div>" value)
-    (= label "cook-time") (format "\t\t\t<div><strong>Cook Time:</strong>%s</div>" value)
+    (= label "category") (format "\t\t\t<div><strong>Category:</strong>%s minutes</div>" value) ; al escribir aqui 'minutes' evito que se vea extraño en los casos donde minutes y mins vienen duplicados
+    (= label "prep-time") (format "\t\t\t<div><strong>Prep Time:</strong>%s minutes</div>" value)
+    (= label "cook-time") (format "\t\t\t<div><strong>Cook Time:</strong>%s minutes</div>" value)
     (= label "servings") (format "\t\t\t<div><strong>Servings:</strong>%s</div>" value)
     (= label "calories_serving") (format "\t\t\t<div><strong>Calories Per Serving:</strong>%s Kcal</div>" value)
     (= label "calories_total") (format "\t\t\t<div><strong>Total Calories:</strong>%s Kcal</div>" value)
@@ -72,23 +73,23 @@
 
 ; --función para crear la sección de metadata--
 (defn create-html-meta [meta_lst] '(
-  "\t\t<div class=\"meta\">"
+  "\t\t<section class=\"meta\">"
   (map token->div meta_lst)
-  "\t\t</div>"
+  "\t\t</section>"
   ))
 
 ; --funciones para crear la sección de ingredientes--
 (defn create-html-ingredients [ingredients_lst]
-  "\t\t<div class=\"ingredients\">"
+  "\t\t<section class=\"ingredients\">"
   (map lst->div ingredients_lst)
-  "\t\t</div>"
+  "\t\t</section>"
   ))
 
 ; --funciones para crear la sección de instrucciones--
 (defn create-html-instructions [instructions_lst]
-  "\t\t<div class=\"instructions\">"
+  "\t\t<section class=\"instructions\">"
   (map lst->div instructions_lst)
-  "\t\t</div>"
+  "\t\t</section>"
   ))
 
 ; --función para crear el string completo del HTML a partir de los tokens--

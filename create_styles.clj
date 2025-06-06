@@ -1,8 +1,7 @@
 (ns create-styles
   (:require [clojure.java.io :as io])) ; librería para manejar archivos y carpetas
 
-(def css-content
-    '(
+(def css-content '(
     "body { margin: 0; font-family: 'Atkinson Hyperlegible', sans-serif; background-color: #fff8f2; color: #333; }"
     ".navbar { position: fixed; top: 0; left: 0; width: 100%; height: 70px; background-color: #ff7f50; display: flex; align-items: center; padding: 0 2em; z-index: 1000; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);}"
     ".navbar ul { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: auto; width: 100%; max-width: 1200px; margin: 0; padding: 0; list-style: none; }"
@@ -23,8 +22,7 @@
     ".ingredients span, .instructions span { font-weight: bold; }"
     ".instructions div { margin-bottom: 1em; }"
     ".instructions strong { padding-right: 1em; color: #ff7f50; font-weight: bold; }"
-    )
-)
+))
 
 ; --función para agregar saltos de línea entre las líneas para que se vea más entendible el archivo final--
 (defn add-endl [lines]

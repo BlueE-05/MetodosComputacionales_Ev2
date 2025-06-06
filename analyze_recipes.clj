@@ -16,7 +16,7 @@
   (quantity     ; String or Number: e.g. "1/2" or 200
    unit         ; Symbol: e.g. 'cup, 'grams, or #f
    description  ; String: e.g. "extra-virgin olive oil"
-   type)        ; Symbol: e.g. 'oil, 'spice, etc.
+   type)        ; Symbol: e.g. 'oil, 'spice, 'flour, etc.
   #:transparent)
 
 (struct instruction
@@ -27,7 +27,7 @@
    )
   #:transparent)
 
-(define example-recipe
+(def example-recipe
   (recipe
    'dessert
    4
