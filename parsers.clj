@@ -1,45 +1,45 @@
 (ns parsers
   (:require [clojure.string :as str]))
 
-; --función para leer líneas de un archivo--
-(defn leer-lineas [ruta-archivo]
-  (clojure.string/split-lines (slurp ruta-archivo)))
-
 ; --diccionario de expresiones regulares para tokenizar la receta--
-(def regex{
-   "author"     #"^(Author|Submitted by|By):\s*(.+)$"
-   "servings"   #"^(Servings|serves|Servings -|servings -)\s*[:\-]?\s*(\d+)$"
-   "prep-time"  #"^(Prep Time|Preparation Time):\s*(.+)$"
-   "cook-time"  #"^(Cook Time|Cooking Time):\s*(.+)$"
-   "total-time" #"^(Total Time):\s*(.+)$"
-   "category"   #"^Category:\s*(.+)$"
-   "ingredients" #"^Ingredients:|^Ingredient List:|^Ingredients List:|^Ingredients -"
-   "instructions" #"^Instructions:|^Method:|^Directions:|^How to Prepare:|^Preparation Steps:"
-
-   "cup"        #"^\d+\s+(cup|cups)(.+)$"
-   "teaspoon"   #"^\d+\s+(teaspoon|teaspoons|tsp)(.+)$"
-   "tablespoon" #"^\d+\s+(tablespoon|tablespoons|tbsp)(.+)$"
-   "grams"      #"^\d+\s+(grams|gram|g)(.+)$"
-   "kilograms"  #"^\d+\s+(kilograms|kg)(.+)$"
-   "liters"     #"^\d+\s+(liters|liter|l)(.+)$"
-   "ml"         #"^\d+\s+(milliliters|milliliter|ml)(.+)$"
-   "pinch"      #"^\d+\s+(dash|pinch)(.+)$"
-
-   "oil"        #"^oil"
-   "spice"      #"^(spice|paprika|cumin|cinnamon|pepper|salt|oregano)(.+)$"
-   "vegetable"  #"^(vegetable|onion|garlic|carrot|celery|herb|parsley|basil|cilantro|thyme)(.+)$"
-   "flour"      #"^flour"
-   "baking soda" #"^()"
-   "cocoa"      #"^cocoa powder"
-   "water-like" #"^vinegar|water|broth|stock|juice|milk|sauce|extract"
-   "sugar"      #"^sugar"
-   "butter"     #"^butter"
-   "cheese"     #"^cheese"
-   "meat"       #"^(beef|chicken|pork|fish|lamb)(.+)$"
-   "fruit"      #"^(apple|banana|orange|lemon|berry)(.+)$"
-   "cloves"     #"^(cloves|sprig)"
-
-   "number"     #"(\d+|\d+/\d+|\d+\.\d+|\d+)"
+(def regex {
+    "author"     #"^(Author|Submitted by|By):\s*(.+)$"
+    "servings"   #"^(Servings|serves|Servings -|servings -)\s*[:\-]?\s*(\d+)$"
+    "prep-time"  #"^(Prep Time|Preparation Time):\s*(.+)$"
+    "cook-time"  #"^(Cook Time|Cooking Time):\s*(.+)$"
+    "total-time" #"^(Total Time):\s*(.+)$"
+    "category"   #"^Category:\s*(.+)$"
+    "ingredients"  #"^Ingredients:|^Ingredient List:|^Ingredients List:|^Ingredients -"
+    "instructions" #"^Instructions:|^Method:|^Directions:|^How to Prepare:|^Preparation Steps:"
+    ; mediciones
+    "cup"        #"^\d+\s+(cup|cups)"
+    "teaspoon"   #"^\d+\s+(teaspoon|teaspoons|tsp)"
+    "tablespoon" #"^\d+\s+(tablespoon|tablespoons|tbsp)"
+    "grams"      #"^\d+\s+(grams|gram|g)"
+    "kilograms"  #"^\d+\s+(kilograms|kg)"
+    "liters"     #"^\d+\s+(liters|liter|l)"
+    "ml"         #"^\d+\s+(milliliters|milliliter|ml)"
+    "pinch"      #"^\d+\s+(dash|pinch)"
+    ; ingredientes agrupados
+    "oil"        #"^oil"
+    "spice"      #"^(spice|paprika|cumin|cinnamon|pepper|salt|oregano|rosemary)"
+    "vegetable"  #"^(vegetable|onion|garlic|carrot|celery|herb|parsley|basil|cilantro|thyme)"
+    "flour"      #"^flour"
+    "baking_soda" #"^(baking soda|baking powder)"
+    "cocoa"      #"^cocoa powder"
+    "water-like" #"^(vinegar|water|broth|stock|juice|milk|sauce|extract|lemon juice)"
+    "sugar"      #"^granulated sugar"
+    "sugar_powder" #"^powdered sugar"
+    "butter"     #"^butter"
+    "cheese"     #"^cheese"
+    "meat"       #"^(beef|chicken|pork|fish|lamb)"
+    "fruit"      #"^(apple|banana|orange|lemon|berry)"
+    "cloves"     #"^(cloves|sprig)"
+    "grated"     #"^grated zest"
+    "egg"        "^(egg|eggs)"
+    ; numerals
+    "number"     #"^(\d+|\d+\.\d+)"
+    "fraction"   #"^\d+/\d+"
 })
 
 ; --función para encontrar coincidencias con las expresiones regulares--
@@ -104,8 +104,9 @@
 
 ; --función principal que procesa las líneas y devuelve los tokens--
 (defn parsers [lines]
-  {:tokens (parser-tokens lines)
-   :metadata (parser-metadata lines)}
+    ;!TODO: guardar con base en la estructura de recipe y hacer append en una estructura general que almacene todos los recipes
+    {:tokens (parser-tokens lines)
+    :metadata (parser-metadata lines)}
 )
 
 ;; Ejemplo
