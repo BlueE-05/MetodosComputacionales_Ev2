@@ -1,10 +1,7 @@
 (ns conversions
   (:require [clojure.string :as str]))
 
-(ns conversions
-  (:require [clojure.string :as str]))
-
-;; Tabla de conversión taza → gramos por ingrediente (valores aproximados)
+;; --- Tablas de conversión y alias ---
 (def conversion-table
   {
    ;; Azúcares y harinas
@@ -38,7 +35,7 @@
    "romano cheese"          100
   })
 
-;; Conversión directa de unidades volumétricas/masas
+; Tabla de gramos por unidad para cada unidad volumétrica/peso
 (def unit-conversion
   {
    "tablespoon" 15
@@ -48,11 +45,11 @@
    "pint"       473.176
   })
 
-;; Ingredientes que no se convierten, pero pueden escalarse
+; Unidades que no se convierten
 (def non-convertible-units
   ["dash" "pinch" "clove" "sprig" "zest" "eggs" "egg" "garlic"])
 
-;; Alias de ingredientes para unificarlos
+; Alias para normalizar nombres de ingredientes
 (def ingredient-aliases
   {
    "salt"            "sea salt"
@@ -61,107 +58,175 @@
    "ev olive oil"    "extra-virgin olive oil"
   })
 
-;; Normaliza el nombre del ingrediente
+;; --- Utilidades de normalización y parsing ---
 (defn normalize-ingredient-name [name]
+  ;; Convierte el nombre a minúsculas y busca un alias si existe
   (let [lc-name (str/lower-case name)]
     (get ingredient-aliases lc-name lc-name)))
 
-;; Convierte tazas a gramos
-(defn cup-to-gram [ingredient cups]
-  (let [normalized (normalize-ingredient-name ingredient)]
-    (if-let [grams-per-cup (get conversion-table normalized)]
-      (* cups grams-per-cup)
-      nil)))
-
-;; Convierte gramos a tazas
-(defn gram-to-cup [ingredient grams]
-  (let [normalized (normalize-ingredient-name ingredient)]
-    (if-let [grams-per-cup (get conversion-table normalized)]
-      (/ grams grams-per-cup)
-      nil)))
-
 (defn singularize-unit [unit]
+  ;; Convierte unidades plurales a singulares y normaliza unidades irregulares
   (let [unit-lc (str/lower-case unit)]
     (cond
-      (= unit-lc "ounces") "oz"
-      (= unit-lc "pounds") "lb"
+      (= unit-lc "ounces") "oz" ; Caso especial
+      (= unit-lc "pounds") "lb" ; Caso especial
+      ;; Si termina en "s" y la versión singular está en la tabla, la convierte
       (and (str/ends-with? unit-lc "s")
            (contains? unit-conversion (subs unit-lc 0 (dec (count unit-lc)))))
       (subs unit-lc 0 (dec (count unit-lc)))
-      :else unit-lc)))
+      :else unit-lc))) ; Si no, regresa la unidad tal cual
+
+(defn parse-amount
+  [amount-str]
+  (let [parts (str/split amount-str #" ")]
+    (cond
+      ;; Caso mixto: "1 1/2"
+      (= (count parts) 2)
+      (+ (Double/parseDouble (first parts))
+         (let [[n d] (str/split (second parts) #"/")]
+           (/ (Double/parseDouble n) (Double/parseDouble d))))
+      ;; Caso fracción: "1/2"
+      (str/includes? amount-str "/")
+      (let [[n d] (str/split amount-str #"/")]
+        (/ (Double/parseDouble n) (Double/parseDouble d)))
+      ;; Caso decimal o entero
+      :else
+      (Double/parseDouble amount-str))))
+
+;; --- Funciones de conversión de unidades ---
+(defn cup-to-gram [ingredient cups]
+  ;; Convierte tazas de un ingrediente a gramos usando la tabla
+  (let [normalized (normalize-ingredient-name ingredient)]
+    (if-let [grams-per-cup (get conversion-table normalized)]
+      (* cups grams-per-cup)
+      nil))) ; Si no está en la tabla, regresa nil
+
+(defn gram-to-cup [ingredient grams]
+  ;; Convierte gramos de un ingrediente a tazas usando la tabla
+  (let [normalized (normalize-ingredient-name ingredient)]
+    (if-let [grams-per-cup (get conversion-table normalized)]
+      (/ grams grams-per-cup)
+      nil))) ; Si no está en la tabla, regresa nil
 
 (defn unit-to-gram [unit amount]
+  ;; Convierte una cantidad de unidad volumétrica/peso a gramos usando la tabla
   (let [normalized-unit (singularize-unit unit)]
     (if-let [g (get unit-conversion normalized-unit)]
       (* amount g)
-      nil)))
+      nil))) ; Si no está en la tabla, regresa nil
 
-;; Conversión de temperatura
-(defn f-to-c [f] (Math/round (double (* (- f 32) (/ 5.0 9)))))
-(defn c-to-f [c] (Math/round (double (+ (* c (/ 9.0 5)) 32))))
+;; --- Conversión de temperatura ---
+(defn f-to-c [f]
+  ;; Convierte Fahrenheit a Celsius, redondeando al entero más cercano
+  (Math/round (double (* (- f 32) (/ 5.0 9)))))
 
-;; Escalado proporcional
+(defn c-to-f [c]
+  ;; Convierte Celsius a Fahrenheit, redondeando al entero más cercano
+  (Math/round (double (+ (* c (/ 9.0 5)) 32))))
+
+(defn convert-temp-text [text target-unit]
+  ;; Busca temperaturas en un texto y las convierte a la unidad deseada
+  (let [pattern #"(?i)(\d+)\s*°?\s*(f|c|f°|c°|fahrenheit|celsius)"]
+    (str/replace text pattern
+      (fn [[_ temp unit]]
+        (let [t (Integer/parseInt temp)
+              norm-unit (str/lower-case unit)]
+          (cond
+            ;; Si es Fahrenheit y queremos Celsius
+            (and (#{ "f" "f°" "fahrenheit" } norm-unit) (= target-unit "C"))
+            (str (f-to-c t) "°C")
+            ;; Si es Celsius y queremos Fahrenheit
+            (and (#{ "c" "c°" "celsius" } norm-unit) (= target-unit "F"))
+            (str (c-to-f t) "°F")
+            ;; Si ya está en la unidad deseada, solo normaliza el formato
+            :else (str t "°" (str/capitalize norm-unit))))))))
+
+;; --- Escalado proporcional ---
 (defn scale-quantity [cantidad porciones-actuales porciones-nuevas]
+  ;; Escala una cantidad de acuerdo al cambio de porciones
   (* cantidad (/ porciones-nuevas porciones-actuales)))
 
+;; --- Conversión de líneas y estructuras de ingredientes ---
+(defn convert-ingredient-line
+  [line options]
+  (let [{:keys [sistema porciones-actuales porciones-nuevas]} options
+        parts (str/split line #" ")
+        ;; Detecta si la cantidad es mixta (ej. "1 1/2") y la une
+        amount-str (if (and (> (count parts) 2) (re-matches #"\d+" (first parts)))
+                   (str (first parts) " " (second parts))
+                   (first parts))
+        ;; Selecciona la unidad correctamente según si la cantidad es mixta o simple
+        unit (if (and (> (count parts) 2) (re-matches #"\d+" (first parts)))
+             (nth parts 2)
+             (second parts))
+        ;; Extrae el ingrediente correctamente según el caso
+        ingredient (->> (drop (if (and (> (count parts) 2) (re-matches #"\d+" (first parts))) 3 2) parts)
+                      (str/join " ") str/lower-case)
+        amount (parse-amount amount-str) ; Convierte la cantidad a número
+        scaled (scale-quantity amount porciones-actuales porciones-nuevas) ; Escala la cantidad
+        normalized (normalize-ingredient-name ingredient)] ; Normaliza el nombre del ingrediente
+    (cond
+      ;; Si el sistema es "cup", solo escala y muestra la cantidad
+      (= sistema "cup")
+      {:original line
+       :scaled scaled
+       :unit unit
+       :ingredient normalized
+       :converted (str scaled " " unit " " normalized)}
 
-(println "Pruebas")
+      ;; Si el sistema es "metric", convierte a gramos si es posible
+      (= sistema "metric")
+      (let [g (if (= unit "cup")
+                (cup-to-gram normalized scaled)
+                (unit-to-gram unit scaled))]
+        {:original line
+         :scaled scaled
+         :unit "g"
+         :ingredient normalized
+         :converted (if g
+                      (str (Math/round g) " g " normalized)
+                      (str scaled " " unit " " normalized))}))))
 
-;; Lemon Cake-1.txt
-(println (cup-to-gram "all-purpose flour" 1))         ; 150
-(println (cup-to-gram "almond flour" 0.5))            ; 48
-(println (unit-to-gram "teaspoon" 1.5))               ; 7.5 (baking powder)
-(println (unit-to-gram "teaspoon" 0.5))               ; 2.5 (kosher salt)
-(println (cup-to-gram "extra-virgin olive oil" 0.5))  ; 109
-(println (cup-to-gram "granulated sugar" 0.5))        ; 100
-(println (unit-to-gram "teaspoon" 0.5))               ; 2.5 (vanilla extract)
-(println (cup-to-gram "lemon juice" 0.5))             ; 120
-(println (cup-to-gram "powdered sugar" 1))            ; 120
-(println (f-to-c 350))                                ; 177
+(defn convert-ingredient-struct
+  ;; Convierte un mapa de ingrediente {:quantity ... :unit ... :description ...} a sistema cup o métrico, escalando la cantidad
+  [ingred {:keys [sistema porciones-actuales porciones-nuevas]}]
+  (let [amount (if (string? (:quantity ingred))
+                 (parse-amount (:quantity ingred)) ; Convierte la cantidad si es string
+                 (:quantity ingred))
+        scaled (scale-quantity amount porciones-actuales porciones-nuevas) ; Escala la cantidad
+        unit (name (:unit ingred)) ; Convierte la unidad a string
+        normalized (normalize-ingredient-name (:description ingred))] ; Normaliza el nombre del ingrediente
+    (cond
+      ;; Si el sistema es "cup", solo escala y normaliza
+      (= sistema "cup")
+      (assoc ingred
+             :quantity scaled
+             :unit (:unit ingred)
+             :description normalized)
 
-;; Best Homemade Brownies-1.txt
-(println (cup-to-gram "granulated sugar" 1.5))        ; 300
-(println (cup-to-gram "all-purpose flour" 0.75))      ; 112.5
-(println (cup-to-gram "cocoa powder" 0.66))           ; 56.1
-(println (cup-to-gram "powdered sugar" 0.5))          ; 60
-(println (cup-to-gram "dark chocolate chips" 0.5))    ; 85
-(println (unit-to-gram "teaspoon" 0.75))              ; 3.75 (sea salt)
-(println (cup-to-gram "canola oil" 0.5))              ; 109
-(println (unit-to-gram "tablespoon" 2))               ; 30 (water)
-(println (unit-to-gram "teaspoon" 0.5))               ; 2.5 (vanilla)
-(println (f-to-c 325))                                ; 163
+      ;; Si el sistema es "metric", convierte a gramos si es posible
+      (= sistema "metric")
+      (let [grams (if (= unit "cup")
+                    (cup-to-gram normalized scaled)
+                    (unit-to-gram unit scaled))]
+        (assoc ingred
+               :quantity (if grams (Math/round grams) scaled)
+               :unit (if grams 'g (:unit ingred))
+               :description normalized)))))
 
-;; Chimichurri Sauce.txt
-(println (cup-to-gram "extra-virgin olive oil" 0.5))  ; 109
-(println (unit-to-gram "tablespoon" 2))               ; 30 (white wine vinegar)
-(println (unit-to-gram "teaspoon" 0.5))               ; 2.5 (sea salt)
-(println (unit-to-gram "teaspoon" 0.5))               ; 2.5 (dried oregano)
-(println (unit-to-gram "teaspoon" 0.25))              ; 1.25 (red pepper flakes)
-(println (unit-to-gram "teaspoon" 0.25))              ; 1.25 (smoked paprika)
+;; --- Ejemplos de uso ---
+(println
+  (convert-ingredient-line
+    "1 1/2 cup almond flour"
+    {:sistema "metric" :porciones-actuales 4 :porciones-nuevas 8}))
+;; Esperado: {:original "1 1/2 cup almond flour", :scaled 3.0, :unit "g", :ingredient "almond flour", :converted "288 g almond flour"}
 
-;; Fettuccine Alfredo.txt
-(println (unit-to-gram "oz" 24))                      ; 680.4 (dry fettuccine pasta)
-(println (cup-to-gram "butter" 1))                    ; 227
-(println (unit-to-gram "pint" 0.75))                  ; 354.882 (heavy cream, en ml)
-(println (cup-to-gram "romano cheese" 0.75))          ; 75
-(println (cup-to-gram "parmesan cheese" 0.5))         ; 50
+(println
+  (convert-temp-text "Bake at 350 F for 30 minutes." "C"))
+;; Esperado: "Bake at 177°C for 30 minutes."
 
-;; Pan-Seared Steak with Garlic Butter.txt
-(println (unit-to-gram "lb" 2))                       ; 907.2 (steaks)
-(println (unit-to-gram "tablespoon" 0.5))             ; 7.5 (vegetable oil)
-(println (unit-to-gram "teaspoon" 1.5))               ; 7.5 (sea salt)
-(println (unit-to-gram "teaspoon" 1))                 ; 5 (black pepper)
-(println (unit-to-gram "tablespoon" 2))               ; 30 (unsalted butter)
-(println (f-to-c 350))                                ; 177
-
-;; Pruebas de alias (ingredient-aliases)
-(println (cup-to-gram "vanilla extract" 1))           ; 208
-(println (cup-to-gram "ev olive oil" 1))              ; 218
-
-;; Pruebas de conversión inversa
-(println (gram-to-cup "granulated sugar" 400))        ; 2
-(println (gram-to-cup "all-purpose flour" 75))        ; 0.5
-
-;; Prueba de escala de cantidad
-;; Escala la cantidad 2 (por ejemplo, 2 tazas) de una receta pensada para 4 porciones a una versión para 8 porciones.
-(println (scale-quantity 2 4 8))                      ; 4.0
+(println
+  (convert-ingredient-struct
+    {:quantity "2/3" :unit :cup :description "granulated sugar"}
+    {:sistema "metric" :porciones-actuales 4 :porciones-nuevas 8}))
+;; Esperado: {:quantity 267, :unit g, :description granulated sugar, ...}
