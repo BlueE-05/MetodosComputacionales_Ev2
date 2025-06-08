@@ -123,3 +123,5 @@
           html-with-endl (add-endl html-lines)]
       (spit filename html-with-endl)
     )))
+
+;!TODO: modificar para que genere el html con base en la nueva estructura recipe
