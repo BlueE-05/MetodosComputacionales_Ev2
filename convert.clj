@@ -35,6 +35,33 @@
    "romano cheese"          100
   })
 
+  ; Tabla de calorías por gramo para cada ingrediente
+(def calories-per-gram
+  {
+   "granulated sugar"       4.0
+   "powdered sugar"         3.8
+   "flour"                  3.6
+   "all-purpose flour"      3.6
+   "almond flour"           6.0
+   "cocoa powder"           4.0
+   "canola oil"             9.0
+   "olive oil"              9.0
+   "extra-virgin olive oil" 9.0
+   "vegetable oil"          9.0
+   "butter"                 7.2
+   "unsalted butter"        7.2
+   "heavy cream"            3.5
+   "water"                  0.0
+   "lemon juice"            0.2
+   "white wine vinegar"     0.0
+   "vanilla"                2.1
+   "dark chocolate chips"   5.4
+   "sea salt"               0.0
+   "kosher salt"            0.0
+   "parmesan cheese"        4.0
+   "romano cheese"          4.0
+  })
+
 ; Tabla de gramos por unidad para cada unidad volumétrica/peso
 (def unit-conversion
   {
@@ -114,6 +141,18 @@
     (if-let [g (get unit-conversion normalized-unit)]
       (* amount g)
       nil))) ; Si no está en la tabla, regresa nil
+
+;; --- Calorías estimadas por ingrediente ---
+(defn estimate-calories [ingred]
+  ;; Estima las calorías de un ingrediente estructurado {:quantity ... :unit ... :description ...}
+  (let [desc (normalize-ingredient-name (:description ingred))
+        qty  (:quantity ingred)
+        unit (name (:unit ingred))
+        grams (if (= unit "g") qty (unit-to-gram unit qty))
+        cal-per-gram (get calories-per-gram desc 0)]
+    (if (and grams cal-per-gram)
+      (* grams cal-per-gram)
+      0)))
 
 ;; --- Conversión de temperatura ---
 (defn f-to-c [f]
