@@ -41,7 +41,7 @@
   "meat"       #"(?i)\b(beef|chicken|pork|fish|lamb)\b"
   "fruit"      #"(?i)\b(apple|banana|orange|lemon|berry)\b"
   "cloves"     #"(?i)\b(cloves|sprig)\b"
-  "grated"     #"(?i)\bgrated zest\b"
+  "lemon_zest" #"(?i)\bgrated zest\b"
   "egg"        #"(?i)\b(egg|eggs)\b"
   ; numbers
   "number"     #"^\d+(\.\d+)?"
@@ -49,24 +49,25 @@
 })
 
 ;; STRUCTS
-(defrecord Recipe [category servings unit-system temperature-unit analysis-time tokens metadata ingredients instructions])
+(defrecord Recipe [category servings unit-system temperature-unit tokens metadata ingredients instructions]) ;maybe add :analysis time
 (defrecord Ingredient [quantity unit text type])
 (defrecord Instruction [step text contains-temp? contains-ingredient?])
 
 ;; UTILITIES
-; --función que 
+; --función que regresa la primer coincidencia de la linea con el regex o nil en el formato [clave último-grupo]--
 (defn match-line [line]
   (some (fn [[k r]]
-          (when-let [m (re-matches r line)]
+          (when-let [m (re-matches r line)] ; rematches toma un regex y una cadena de texto. Devuelve la coincidencia completa si toda la cadena coincide exactamente o nil
             [k (last m)]))
         regex))
 
-; --función que 
+; --función que regresa la primer coincidencia de la linea con el regex o nil--
 (defn matches-any-regex? [line]
   (some (fn [[_ r]] (re-matches r line)) regex))
 
 ; --función que divide las secciones de la receta--
 (defn split-sections [lines]
+  ; Encuentra los índices donde comienzan las secciones de ingredientes e instrucciones
   (let [idx-map (reduce (fn [acc [i line]]
                           (cond
                             (re-matches (regex "ingredients") line) (assoc acc :ingredients i)
@@ -85,11 +86,11 @@
 ;; PARSERS
 ; --función que obtiene la metadata de la receta--
 (defn parser-metadata [lines]
-  (reduce
+  (reduce ; acumular resultados en un mapa vacío
     (fn [acc line]
       (if-let [[k v] (match-line line)]
         (assoc acc (keyword k)
-               (try (Integer/parseInt v)
+               (try (Integer/parseInt v) ; Intenta convertir el valor v a entero con Integer/parseInt
                     (catch Exception _ v)))
         acc))
     {} lines))
@@ -119,22 +120,21 @@
 (defn parse-quantity [word]
   (try ; try catch para evitar crasheos
     (cond
-      (re-matches (get regex "number") word) (Double/parseDouble word)
+      (re-matches (get regex "number") word) (Double/parseDouble word) ; convierte word a un número con punto decimal con Double/parseDouble
       (re-matches (get regex "fraction") word)
       (let [[n d] (str/split word #"/")]
         (/ (Double/parseDouble n) (Double/parseDouble d)))
       :else nil)
     (catch Exception _ nil)))
 
-; --función que !
+; --función que busca y extrae la primera cantidad válida en una lista de palabras--
 (defn extract-quantity [words]
-  (some parse-quantity words))
+  (some parse-quantity words)) ; some aplica parse-quantity a cada elemento y devuelve el primer resultado no-nil
 
-; --función que detecta las unidades de medición --
+; --función que detecta las unidades de medición 'metric o 'cup--
 (defn detect-unit [line]
   (some (fn [[k r]]
-          (when (and (contains? #{"cup" "teaspoon" "tablespoon" "grams" "kilograms"
-                                  "liters" "ml" "pinch"} k)
+          (when (and (contains? #{"cup" "teaspoon" "tablespoon" "grams" "kilograms" "liters" "ml" "pinch"} k)
                      (re-find r line))
             (symbol k)))
         regex))
@@ -146,7 +146,7 @@
             (symbol k)))
         regex))
 
-; -- !
+; --función que lee los ingredientes de lines y crea el ingrediente--
 (defn parser-ingredient [lines]
   (letfn [(parse-lines [ls acc]
             (if (empty? ls)
@@ -168,12 +168,13 @@
                       (conj acc (->Ingredient quantity unit text type))))))))]
     (parse-lines lines [])))
 	
-;; -- Parsing Instruction --
+; --función que identifica F|C--
 (defn parse-temperature [line]
   (when-let [m (re-find (get regex "temperature") line)]
     [(Double/parseDouble (nth m 1))
      (if (= (str/upper-case (nth m 2)) "F") 'F 'C)]))
 
+; --función que lee y crea la instrucción a partir de line--
 (defn parse-instruction-line [line step-num]
   (let [clean-line (str/trim (str/replace line #"^\d+\.\s*" ""))
         contains-temp? (boolean (parse-temperature line))
@@ -189,6 +190,7 @@
       contains-temp?
       (boolean contains-ingredient?))))
 
+; -- --
 (defn parser-instructions
   ([lines] (parser-instructions lines 1 []))
   ([lines step-num acc]
@@ -200,13 +202,31 @@
            inst (parse-instruction-line line step-num)]
        (parser-instructions (rest lines) (inc step-num) (conj acc inst))))))
 
+;; INFERS
 (defn infer-category-from-title [title]
   (cond
     (re-find (get regex "side-dish") title) "side-dish"
     (re-find (get regex "dessert") title) "dessert"
     :else "all"))
 
-;; -- Final recipe builder --
+(defn infer-unit-system [ingredients]
+  (let [metric? (some #(contains? #{'grams 'kilograms 'liters 'ml} (:unit %)) ingredients)
+        imperial? (some #(contains? #{'cup 'teaspoon 'tablespoon 'pinch} (:unit %)) ingredients)]
+    (cond
+      metric? 'metric
+      imperial? 'cup
+      :else 'unknown)))
+
+(defn infer-temperature-unit [instructions]
+  (let [temps (keep #(parse-temperature (:text %)) instructions)
+        units (set (map second temps))]
+    (cond
+      (units 'F) 'F
+      (units 'C) 'C
+      :else nil)))
+
+;; FINAL
+; --función que crea la receta, aplicando todas las funciones previas--
 (defn build-recipe [lines]
   (let [tokens-map (parser-tokens lines)
         metadata-map (parser-metadata lines)
@@ -214,37 +234,22 @@
         ingredients (parser-ingredient (get sections :ingredients []))
         instructions (parser-instructions (get sections :instructions []))
         title-category (infer-category-from-title (:title tokens-map))
-        final-category (keyword (or (:category metadata-map) title-category))]
+        final-category (keyword (or (:category metadata-map) title-category))
+        unit-system (infer-unit-system ingredients)
+        temp-unit (infer-temperature-unit instructions)]
 
     (->Recipe 
       final-category
       (get metadata-map :servings 1)
-      'cup
-      'Celsius
-      5
+      unit-system
+      temp-unit
       tokens-map
       metadata-map
       ingredients
       instructions)))
 
-;; -- Example test --
-(def example-lineas
-  ["Chimichurri Sauce"
-   "This Pan-Seared Steak has a garlic butter that makes it taste like a steakhouse quality meal."
-   "You'll be impressed at how easy it is to make the perfect steak that's seared on the outside, and perfectly tender inside."
-   "Author: Natasha of NatashasKitchen.com"
-   "Servings - 4"
-   "Prep Time: 5 mins"
-   "Cook Time: 15 mins"
-   "Total Time: 20mins"
-   "Ingredients"
-   "2 tablespoons olive oil"
-   "1 teaspoon salt"
-   "1/2 cup extra-virgin olive oil"
-   "Instructions:"
-   "1. Season the steak with salt and pepper."
-   "2. Heat the oil in a skillet over high heat."
-   "3. Preheat the oven to 325°F."
-   "4. Thoroughly pat steak dry with paper towels. Just before cooking, generously season with 1 1/2 tsp salt and 1 tsp black pepper"])
+(def lines {
+  "HELLO"
+})
 
-(println (build-recipe example-lineas))
+(build-recipe lines)

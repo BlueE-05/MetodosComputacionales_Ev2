@@ -1,2 +1,0 @@
-{:paths ["."]
- :aliases {:run {:main-opts ["-m" "parsers"]}}}

@@ -2,6 +2,9 @@
   (:require [clojure.java.io :as io])  ; librería para manejar archivos y carpetas
   (:require [create-styles.clj])) ; funcion add-endl
 
+;!TODO: cambiar a que reciba la nueva estructura de Recipe
+
+
 ; --función para obtener el número máximo de archivos 'recipe' en la carpeta 'results'--
 (defn get-max-recipe-num [dir]
     (let [files (file-seq (io/file dir))
