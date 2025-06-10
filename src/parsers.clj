@@ -1,5 +1,6 @@
 (ns parsers
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [clojure.java.io :as io]))
 
 ;; REGEX DICTIONARY
 (def regex {
@@ -97,20 +98,20 @@
 
 ; --función que obtine descripción de la receta o cosas que no pertenecen a ninguna otra sección--
 (defn parser-tokens [lines]
-  (let [[title & rest] lines
-        author-index (first (keep-indexed
-                             (fn [i line]
-                               (when (re-matches (get regex "author") line) i))
-                             rest))
-        before-author (if author-index (subvec (vec rest) 0 author-index) rest)
-        author-line (when author-index (nth rest author-index))
-        author-name (when-let [m (re-matches (get regex "author") author-line)]
-                      (second m))
-        after-author (if author-index (subvec (vec rest) (inc author-index)) []) 
-        description-parts (concat before-author
-                                  (take-while #(not (matches-any-regex? %)) after-author))
-        description (str/join " " (filter (complement str/blank?) description-parts))]
-
+  (let [lines (vec (filter (comp not str/blank?) lines))
+        title (first lines)
+        rest-lines (subvec lines 1)
+        section-index (first (keep-indexed
+                               (fn [i line]
+                                 (when (or (re-matches (get regex "ingredients") line)
+                                           (re-matches (get regex "instructions") line))
+                                   i))
+                               rest-lines))
+        before-section (if section-index (subvec rest-lines 0 section-index) rest-lines)
+        author-line (some #(when-let [m (re-matches (get regex "author") %)] m) before-section)
+        author-name (when author-line (second author-line))
+        description-lines (remove #(re-matches (get regex "author") %) before-section)
+        description (str/join " " (filter (complement str/blank?) description-lines))]
     (merge
      {:title title}
      (when (not (str/blank? description)) {:description description})
@@ -247,6 +248,14 @@
       metadata-map
       ingredients
       instructions)))
+
+(defn leer-archivos-de-receta [ruta-carpeta]
+  (->> (file-seq (io/file ruta-carpeta))
+       (filter #(and (.isFile %)
+                     (str/ends-with? (.getName %) ".txt")))
+       (map #(-> % slurp str/split-lines parsers/build-recipe))
+       (remove nil?)
+       vec))
 
 ;(def lines {
 ;  "HELLO"

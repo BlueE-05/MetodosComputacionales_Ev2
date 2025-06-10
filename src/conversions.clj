@@ -69,19 +69,26 @@
         :else
         (Double/parseDouble amount-str)))
     (catch Exception e
-      (println "Error al parsear cantidad:" amount-str)
+;      (println "Error al parsear cantidad:" amount-str)
       0)))
 
 ;; --- Calorías estimadas ---
 (defn estimate-calories [ingred]
   (let [qty (:quantity ingred)
-        unit (name (:unit ingred))
-        type (:type ingred)
-        cal-per-gram (get calories-per-gram type nil)]
+        unit (when (:unit ingred) (name (:unit ingred)))
+        type (cond
+               (keyword? (:type ingred)) (:type ingred)
+               (string? (:type ingred)) (keyword (:type ingred))
+               :else nil)
+        cal-per-gram (when type (get calories-per-gram type))]
     (cond
+      (or (nil? type) (nil? qty))
+      (do
+;        (println "Advertencia: ingrediente sin tipo o cantidad, ignorando:" ingred)
+        0)
       (nil? cal-per-gram)
       (do
-        (println "Advertencia: tipo de ingrediente desconocido para calorías:" type)
+;        (println "Advertencia: tipo de ingrediente desconocido para calorías:" type)
         0)
       (= type :egg) (* qty cal-per-gram)
       (= unit "g") (* qty cal-per-gram)
@@ -89,7 +96,7 @@
               (if grams
                 (* (* qty grams) cal-per-gram)
                 (do
-                  (println "Advertencia: tipo de ingrediente desconocido para conversión:" type)
+;                  (println "Advertencia: tipo de ingrediente desconocido para conversión:" type)
                   0))))))
 
 ;; --- Temperatura ---
@@ -113,7 +120,9 @@
 
 ;; --- Escalar cantidades ---
 (defn scale-quantity [cantidad actuales nuevas]
-  (* cantidad (/ nuevas actuales)))
+  (if (and (number? cantidad) (number? actuales) (number? nuevas) (pos? actuales))
+    (* cantidad (/ nuevas actuales))
+    cantidad)) ; si hay nil o no es número, regresa la cantidad original
 
 ;; --- Conversión estructurada ---
 (defn convert-ingredient-struct
@@ -122,7 +131,7 @@
                  (parse-amount (:quantity ingred))
                  (:quantity ingred))
         scaled (scale-quantity amount porciones-actuales porciones-nuevas)
-        unit (name (:unit ingred))
+        unit (when (:unit ingred) (name (:unit ingred))) ; <-- cambio aquí
         type (:type ingred)]
     (cond
       (= sistema "cup")
@@ -136,10 +145,11 @@
 
 ;; --- Agregar calorías a metadata ---
 (defn update-metadata-with-calories [recipe]
-  (let [total-cal (->> (:ingredients recipe)
+  (let [ingredientes-validos (filter #(and (some? (:type %)) (some? (:quantity %))) (:ingredients recipe))
+        total-cal (->> ingredientes-validos
                        (map estimate-calories)
                        (reduce + 0))]
-    (update recipe :metadata assoc :calories (Math/round total-cal))))
+    (update recipe :metadata assoc :calories (if (number? total-cal) (Math/round (double total-cal)) 0))))
 
 ;; --- Procesamiento de instrucciones ---
 (defn analyze-instruction [instr ingredients target-temp-unit]

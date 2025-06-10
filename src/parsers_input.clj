@@ -19,11 +19,3 @@
   (into {} 
         (keep match-line lines)))
 
-;(def testing-lines (list
-;  "sistema: cup"
-;  "temp: F"
-;  "porciones: 6"
-;  "filtra: dessert"))
-
-; Ejemplo de uso
-;(println (parser-input testing-lines))
