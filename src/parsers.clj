@@ -6,13 +6,13 @@
 (def regex {
   ; recipe general data
   "author"     #"^(?:Author|Submitted by|By):\s*(.+)$"
-  "servings"   #"^(?:Servings|serves|Servings -|servings -)\s*[:\-]?\s*(\d+)$"
+  "servings"   #"(?i).*(?:servings|serves)\s*[-:]?\s*(\d+).*"
   "prep-time"  #"^(?:Prep Time|Preparation Time):\s*(.+)$"
   "cook-time"  #"^(?:Cook Time|Cooking Time):\s*(.+)$"
   "total-time" #"^(?:Total Time):\s*(.+)$"
   "category"   #"^Category:\s*(.+)$"
-  "ingredients"  #"^(Ingredients:|Ingredients|Ingredient List:|Ingredients List:|Ingredients -)"
-  "instructions" #"^(Instructions:|Instructions|Method:|Directions:|How to Prepare:|Preparation Steps:)"
+  "ingredients"  #"^(Ingredients:|Ingredients|Ingredients: |Ingredient List:|Ingredients List:|Ingredients -)"
+  "instructions" #"^(Instructions:|Instructions|Instructions |Method:|Directions:|How to Prepare:|Preparation Steps:)"
   ; category keywords
   "side-dish"  #"(?i)\b(Side Dish|Sauce|Compliment|Sauces|Dressing)\b"
   "dessert"    #"(?i)\b(Cake|Brownie|Brownies|Cookies)\b"
@@ -26,7 +26,7 @@
   "ml"         #"\b\d+(?:\.\d+)?\s+(milliliters|milliliter|ml)\b"
   "pinch"      #"\b(?:dash|pinch)\b"
   ; temperature
-  "temperature" #"(?i)(\d+)\s*°?\s*(C|F)"
+  "temperature" #"(?i)(\d+)\s*°?\s*(C|F|celsius|fahrenheit)"
   ; ingredient types
   "oil"        #"(?i)\boil\b"
   "spice"      #"(?i)\b(spice|paprika|cumin|cinnamon|pepper|salt|oregano|rosemary)\b"
