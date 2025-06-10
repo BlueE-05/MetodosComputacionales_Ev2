@@ -1,4 +1,4 @@
-(ns parsers-input)
+(ns parsers_input)
 
 (def regex {
   "measures"      #"^sistema:\s*(\w+)"

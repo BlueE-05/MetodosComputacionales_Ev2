@@ -1,9 +1,11 @@
 (ns create-html
-  (:require [clojure.java.io :as io])  ; librería para manejar archivos y carpetas
-  (:require [create-styles.clj])) ; funcion add-endl
+  (:require [clojure.java.io :as io]
+            [create-styles :as create-styles]))
 
 ;!TODO: cambiar a que reciba la nueva estructura de Recipe
 
+(defn add-endl [lines]
+  (str (clojure.string/join "\n" lines)))
 
 ; --función para obtener el número máximo de archivos 'recipe' en la carpeta 'results'--
 (defn get-max-recipe-num [dir]
@@ -68,7 +70,6 @@
     (= label "calories_serving") (format "\t\t\t<div><strong>Calories Per Serving:</strong>%s Kcal</div>" value)
     (= label "calories_total") (format "\t\t\t<div><strong>Total Calories:</strong>%s Kcal</div>" value)
     :else (format "\t<p class=\"description\">%s</p>" value)))
-  ))
 
 ; --función para formatear las listas de ingredientes e instrucciones a divs HTML--
 (defn lst->div [line] ; para instrucciones e ingredientes
@@ -86,14 +87,14 @@
   "\t\t<section class=\"ingredients\">"
   (map lst->div ingredients_lst)
   "\t\t</section>"
-  ))
+  )
 
 ; --funciones para crear la sección de instrucciones--
 (defn create-html-instructions [instructions_lst]
   "\t\t<section class=\"instructions\">"
   (map lst->div instructions_lst)
   "\t\t</section>"
-  ))
+  )
 
 ; --función para crear el string completo del HTML a partir de los tokens--
 (defn html-content [recipe]
@@ -102,7 +103,6 @@
         meta_lst (:metadata recipe)
         ingredients_lst (:ingredients recipe)
         instructions_lst (:instructions recipe)]
-    [title (get-token token_lst "title")]
     ; Crear strings HTML para cada sección
     (concat
       (create-html-header token_lst)
@@ -118,13 +118,11 @@
       (println "No se pudo crear el archivo HTML: la receta está vacía.")
       (do
         (create-styles/create-styles-file) ; Asegurarse de que los estilos estén creados
-        (write-html-file html-lines)))
-    (.mkdirs (io/file "results"))
-    (let [max-num (get-max-recipe-num "results")
-          new-num (inc max-num)
-          filename (str "results/recipe" new-num ".html")
-          html-with-endl (add-endl html-lines)]
-      (spit filename html-with-endl)
-    )))
+        (.mkdirs (io/file "results"))
+        (let [max-num (get-max-recipe-num "results")
+              new-num (inc max-num)
+              filename (str "results/recipe" new-num ".html")
+              html-with-endl (add-endl html-lines)]
+          (spit filename html-with-endl))))))
 
 ;!TODO: modificar para que genere el html con base en la nueva estructura recipe

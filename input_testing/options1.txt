@@ -1,4 +1,4 @@
 sistema: metric
-temp: C  
+temp: C
 porciones: 4
 filtra: all

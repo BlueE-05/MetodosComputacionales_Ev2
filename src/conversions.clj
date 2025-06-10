@@ -20,7 +20,7 @@
    :fruit       130
    :cloves      5
    :grated      1
-   :egg         1}) ; Unidad por huevo
+   :egg         1}) 
 
 (def calories-per-gram
   {
@@ -39,7 +39,7 @@
    :fruit       0.8
    :cloves      0.0
    :grated      0.0
-   :egg         78.0}) ; Calorías por huevo promedio
+   :egg         78.0}) 
 
 ;; --- Conversión de unidades ---
 (defn singularize-unit [unit]
@@ -47,40 +47,50 @@
     (cond
       (= unit-lc "ounces") "oz"
       (= unit-lc "pounds") "lb"
+      (= unit-lc "grams") "g"
+      (= unit-lc "milliliters") "ml"
+      (= unit-lc "liters") "l"
       (and (str/ends-with? unit-lc "s")
            (> (count unit-lc) 1))
       (subs unit-lc 0 (dec (count unit-lc)))
       :else unit-lc)))
 
 (defn parse-amount [amount-str]
-  (let [parts (str/split amount-str #" ")]
-    (cond
-      (= (count parts) 2)
-      (+ (Double/parseDouble (first parts))
-         (let [[n d] (str/split (second parts) #"/")]
-           (/ (Double/parseDouble n) (Double/parseDouble d))))
-      (str/includes? amount-str "/")
-      (let [[n d] (str/split amount-str #"/")]
-        (/ (Double/parseDouble n) (Double/parseDouble d)))
-      :else
-      (Double/parseDouble amount-str))))
+  (try
+    (let [parts (str/split amount-str #" ")]
+      (cond
+        (= (count parts) 2)
+        (+ (Double/parseDouble (first parts))
+           (let [[n d] (str/split (second parts) #"/")]
+             (/ (Double/parseDouble n) (Double/parseDouble d))))
+        (str/includes? amount-str "/")
+        (let [[n d] (str/split amount-str #"/")]
+          (/ (Double/parseDouble n) (Double/parseDouble d)))
+        :else
+        (Double/parseDouble amount-str)))
+    (catch Exception e
+      (println "Error al parsear cantidad:" amount-str)
+      0)))
 
 ;; --- Calorías estimadas ---
 (defn estimate-calories [ingred]
   (let [qty (:quantity ingred)
         unit (name (:unit ingred))
         type (:type ingred)
-        cal-per-gram (get calories-per-gram type 0)]
+        cal-per-gram (get calories-per-gram type nil)]
     (cond
-      ;; Si es tipo huevo, se calcula por unidad
+      (nil? cal-per-gram)
+      (do
+        (println "Advertencia: tipo de ingrediente desconocido para calorías:" type)
+        0)
       (= type :egg) (* qty cal-per-gram)
-      ;; Si está en gramos
       (= unit "g") (* qty cal-per-gram)
-      ;; Para tazas u otras unidades, usar conversiones si hay
-      :else (let [grams (get conversion-table type)]
+      :else (let [grams (get conversion-table type nil)]
               (if grams
                 (* (* qty grams) cal-per-gram)
-                0)))))
+                (do
+                  (println "Advertencia: tipo de ingrediente desconocido para conversión:" type)
+                  0))))))
 
 ;; --- Temperatura ---
 (defn f-to-c [f] (Math/round (double (* (- f 32) (/ 5.0 9)))))
@@ -88,16 +98,18 @@
 
 (defn convert-temp-text [text target-unit]
   (let [pattern (get parsers/regex "temperature")]
-    (str/replace text pattern
-      (fn [[_ temp unit]]
-        (let [t (Integer/parseInt temp)
-              norm-unit (str/lower-case unit)]
-          (cond
-            (and (#{ "f" "f°" "fahrenheit" } norm-unit) (= target-unit "C"))
-            (str (f-to-c t) "°C")
-            (and (#{ "c" "c°" "celsius" } norm-unit) (= target-unit "F"))
-            (str (c-to-f t) "°F")
-            :else (str t "°" (str/capitalize norm-unit))))))))
+    (if (or (nil? pattern) (nil? text))
+      text
+      (str/replace text pattern
+        (fn [[_ temp unit]]
+          (let [t (Integer/parseInt temp)
+                norm-unit (str/lower-case unit)]
+            (cond
+              (and (#{ "f" "f°" "fahrenheit" } norm-unit) (= target-unit "C"))
+              (str (f-to-c t) "°C")
+              (and (#{ "c" "c°" "celsius" } norm-unit) (= target-unit "F"))
+              (str (c-to-f t) "°F")
+              :else (str t "°" (str/capitalize norm-unit)))))))))
 
 ;; --- Escalar cantidades ---
 (defn scale-quantity [cantidad actuales nuevas]
@@ -119,7 +131,7 @@
       (= sistema "metric")
       (let [g (get conversion-table type)]
         (assoc ingred
-               :quantity (if g (Math/round (* scaled g)) scaled)
+               :quantity (if g (Math/round (double (* scaled g))) scaled)
                :unit (if g 'g (:unit ingred)))))))
 
 ;; --- Agregar calorías a metadata ---
@@ -146,6 +158,14 @@
                       (:instructions recipe))]
     (assoc recipe :instructions analyzed)))
 
+;; --- Calorías por porción ---
+(defn calories-per-serving [recipe]
+  (let [total (get-in recipe [:metadata :calories] 0)
+        servings (:servings recipe)]
+    (if (pos? servings)
+      (Math/round (/ total servings))
+      0)))
+
 ;; --- Conversión de receta completa ---
 (defn convert-recipe
   "Convierte una receta estructurada según el sistema de unidades,
@@ -171,46 +191,3 @@
         (analyze-instructions recipe-with-calories)]
 
     final-recipe))
-
-;; --- Ejemplo de uso ---
-(comment
-  ;; --- Receta de prueba ---
-  (def recipe
-    (->Recipe
-      :side-dish
-      4
-      :cup
-      :Celsius
-      {:title "Chimichurri Sauce"
-       :description "Pan-Seared Steak with garlic butter."
-       :author "Natasha of NatashasKitchen.com"}
-      {:author "Natasha of NatashasKitchen.com"
-       :servings 4
-       :prep-time "5 mins"
-       :cook-time "15 mins"
-       :total-time "20mins"
-       :ingredients "Ingredients"
-       :instructions "Instructions:"}
-      [(->Ingredient 2.0 "tablespoon" "olive oil" :oil)
-       (->Ingredient 1.0 "teaspoon" "salt" :spice)
-       (->Ingredient 0.5 "cup" "extra-virgin olive oil" :oil)]
-      [(->Instruction 1 "Season the steak with salt and pepper." false false)
-       (->Instruction 2 "Heat the oil in a skillet over high heat." false false)
-       (->Instruction 3 "Preheat the oven to 325°F." false false)
-       (->Instruction 4 "Season with 1 1/2 tsp salt and 1 tsp black pepper" false false)]))
-
-  ;; --- Prueba de conversión ---
-  (def converted
-    (convert-recipe recipe {:sistema "metric"
-                            :porciones-actuales 4
-                            :porciones-nuevas 8
-                            :temperature-unit "C"}))
-
-  ;; --- Verificación de resultados ---
-  (println "Ingredientes convertidos:" (:ingredients converted))
-  (println "Calorías estimadas:" (get-in converted [:metadata :calories]))
-  (println "Instrucciones transformadas:")
-  (doseq [i (:instructions converted)] (println (:text i)))
-)
-
-
