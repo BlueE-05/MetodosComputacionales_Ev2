@@ -4,7 +4,7 @@
   "measures"      #"^sistema:\s*(\w+)"
   "temp"          #"^temp:\s*(\w+)"
   "servings"      #"^porciones:\s*(\d+)"
-  "recipe_type"   #"^filtra:\s*(\w+)"
+  "recipe_type"   #"^filtra:\s*([\w-]+)"
 })
 
 (defn match-line [line]
@@ -18,4 +18,3 @@
 (defn parser-input [lines]
   (into {} 
         (keep match-line lines)))
-

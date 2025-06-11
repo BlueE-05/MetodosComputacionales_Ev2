@@ -50,7 +50,7 @@
 })
 
 ;; STRUCTS
-(defrecord Recipe [category servings unit-system temperature-unit tokens metadata ingredients instructions]) ;maybe add :analysis time
+(defrecord Recipe [category servings unit-system temperature-unit tokens metadata ingredients instructions])
 (defrecord Ingredient [quantity unit text type])
 (defrecord Instruction [step text contains-temp? contains-ingredient?])
 
@@ -256,9 +256,3 @@
        (map #(-> % slurp str/split-lines parsers/build-recipe))
        (remove nil?)
        vec))
-
-;(def lines {
-;  "HELLO"
-;})
-;
-;(build-recipe lines)

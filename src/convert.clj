@@ -1,4 +1,4 @@
-(ns conversions
+(ns convert
   (:require [clojure.string :as str]
             [parsers :as parsers]))
 

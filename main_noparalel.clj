@@ -3,7 +3,7 @@
             [clojure.string :as str]
             [parsers :as parsers]
             [parsers-input :as parsers-input]
-            [conversions :as conversions]
+            [convert :as convert]
             [create-html :as create-html]
             [create-styles :as create-styles]))
 
@@ -56,7 +56,7 @@
         porciones-nuevas (:servings config)
         porciones-actuales (:servings receta)]
     
-    (conversions/convert-recipe
+    (convert/convert-recipe
       receta
       {:sistema sistema
        :porciones-actuales porciones-actuales
