@@ -1,6 +1,6 @@
 # Evidencia 2. Reconoce y procesa en paralelo
 
-![Salida del programa](imgs/image.png.jpeg)
+![Salida del programa](imgs/image.png.jpeg.jpg)
 
 ## 📖 Descripción
 
