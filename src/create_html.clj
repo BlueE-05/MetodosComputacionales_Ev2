@@ -173,11 +173,11 @@
         unit (when (:unit ingred) (str (name (:unit ingred)) " "))
         text (:text ingred)
         ingredient-str (str (when (not (str/blank? qty)) (str qty " "))
-                           (when unit unit) text)]
-    (format "\t\t\t<div class=\"ingredient\">%s</div>" (str/trim ingredient-str))))
+                            (when unit unit) text)]
+    (format "\t\t\t<div class=\"ingredient\"><strong>%s</strong></div>" (str/trim ingredient-str))))
 
 (defn format-instruction-item [instr]
-  (format "\t\t\t<div class=\"instruction\"><strong>%s.</strong> %s</div>" 
+  (format "\t\t\t<div class=\"instruction\"><strong>%s.</strong> <strong>%s</strong></div>"
           (:step instr) (:text instr)))
 
 ;; Genera todas las secciones de contenido
