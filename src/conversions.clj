@@ -2,6 +2,19 @@
   (:require [clojure.string :as str]
             [parsers :as parsers]))
 
+;; CORRECCIÓN: Funciones de conversión Java→Map con sintaxis correcta
+(defn java-ingredient-to-map [java-ingred]
+  "Convierte un objeto parsers.Ingredient a map de Clojure"
+  {:quantity (:quantity java-ingred)    ; Usar : para acceder a campos del record
+   :unit (:unit java-ingred)           
+   :text (:text java-ingred)           
+   :type (:type java-ingred)})         
+
+(defn java-instruction-to-map [java-instr]
+  "Convierte un objeto parsers.Instruction a map de Clojure"
+  {:step (:step java-instr)           
+   :text (:text java-instr)})         
+
 ;; Tablas de conversión por tipo de ingrediente
 (def conversion-table
   {:oil         218
@@ -486,19 +499,30 @@
                       (:instructions recipe))]
     (assoc recipe :instructions analyzed)))
 
-;; Función principal de conversión de recetas
+;; FUNCIÓN PRINCIPAL CORREGIDA: convert-recipe
 (defn convert-recipe
   [recipe {:keys [sistema porciones-actuales porciones-nuevas temperature-unit]}]
   
-  (let [converted-ingredients
+  ;; PASO 1: Convertir ingredientes e instrucciones de Java objects a maps
+  (let [ingredients-as-maps (map java-ingredient-to-map (:ingredients recipe))
+        instructions-as-maps (map java-instruction-to-map (:instructions recipe))
+        
+        ;; PASO 2: Crear receta temporal con maps
+        recipe-with-maps (assoc recipe 
+                               :ingredients ingredients-as-maps
+                               :instructions instructions-as-maps)
+        
+        ;; PASO 3: Aplicar conversiones a los maps
+        converted-ingredients
         (map #(convert-ingredient-struct %
                  {:sistema sistema
                   :porciones-actuales porciones-actuales
                   :porciones-nuevas porciones-nuevas})
-             (:ingredients recipe))
+             ingredients-as-maps)
 
+        ;; PASO 4: Construir receta final
         updated-recipe
-        (assoc recipe
+        (assoc recipe-with-maps
                :ingredients converted-ingredients
                :servings porciones-nuevas
                :temperature-unit (keyword temperature-unit))

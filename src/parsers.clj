@@ -5,7 +5,7 @@
 ;; REGEX DICTIONARY
 (def regex {
   ; recipe general data
-  "author"     #"^(?:Author|Submitted by|By):\s*(.+)$"
+  "author"     #"^(?:Author|Submitted by|By|From):\s*(.+)$"
   "servings"   #"(?i).*(?:servings|serves)\s*[-:]?\s*(\d+).*"
   "prep-time"  #"^(?:Prep Time|Preparation Time):\s*(.+)$"
   "cook-time"  #"^(?:Cook Time|Cooking Time):\s*(.+)$"
