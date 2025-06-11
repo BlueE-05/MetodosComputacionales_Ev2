@@ -1,6 +1,6 @@
 # Evidencia 2. Reconoce y procesa en paralelo
 
-![Salida del programa](imgs/image.png)
+![Salida del programa](imgs/image.png.jpeg)
 
 ## Estructura del Proyecto
 
