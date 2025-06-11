@@ -2,13 +2,35 @@
   (:require [clojure.string :as str]
             [parsers :as parsers]))
 
-;; CORRECCIÓN: Funciones de conversión Java→Map con sintaxis correcta
+;; Funciones de conversión Java→Map con sintaxis correcta Y CORRECCIÓN DE PARSER
 (defn java-ingredient-to-map [java-ingred]
-  "Convierte un objeto parsers.Ingredient a map de Clojure"
-  {:quantity (:quantity java-ingred)    ; Usar : para acceder a campos del record
-   :unit (:unit java-ingred)           
-   :text (:text java-ingred)           
-   :type (:type java-ingred)})         
+  "Convierte un objeto parsers.Ingredient a map de Clojure Y CORRIGE BUGS DEL PARSER"
+  (let [original-quantity (:quantity java-ingred)
+        original-text (:text java-ingred)
+        original-unit (:unit java-ingred)
+        
+        ;; Re-parsear la cantidad desde el texto completo si parece incorrecta
+        corrected-quantity (if (and original-text (string? original-text))
+                             ;; Buscar fracciones mixtas en el texto que el parser pudo haber perdido
+                             (let [unit-str (if original-unit (name original-unit) "")
+                                   full-line (str original-quantity " " unit-str " " original-text)
+                                   ;; Regex para encontrar "1 1/2" al inicio de la línea
+                                   mixed-fraction (re-find #"^(\d+(?:\.\d+)?)\s+(\d+/\d+)" full-line)]
+                               (if mixed-fraction
+                                 ;; Si encontramos una fracción mixta, calcularla correctamente
+                                 (let [entero (Double/parseDouble (nth mixed-fraction 1))
+                                       fraccion-str (nth mixed-fraction 2)
+                                       [num denom] (str/split fraccion-str #"/")
+                                       fraccion (/ (Double/parseDouble num) (Double/parseDouble denom))]
+                                   (+ entero fraccion))
+                                 ;; Si no, usar la cantidad original
+                                 original-quantity))
+                             original-quantity)]
+  
+    {:quantity corrected-quantity
+     :unit original-unit           
+     :text original-text           
+     :type (:type java-ingred)}))         
 
 (defn java-instruction-to-map [java-instr]
   "Convierte un objeto parsers.Instruction a map de Clojure"
@@ -74,18 +96,39 @@
 ;; Convierte string de cantidad a número, manejando fracciones
 (defn parse-amount [amount-str]
   (try
-    (let [parts (str/split (str amount-str) #" ")]
-      (cond
-        (= (count parts) 2)
-        (+ (Double/parseDouble (first parts))
-           (let [[n d] (str/split (second parts) #"/")]
-             (/ (Double/parseDouble n) (Double/parseDouble d))))
-        (str/includes? (str amount-str) "/")
-        (let [[n d] (str/split (str amount-str) #"/")]
-          (/ (Double/parseDouble n) (Double/parseDouble d)))
-        :else
-        (Double/parseDouble (str amount-str))))
-    (catch Exception e 0)))
+    (let [clean-str (-> (str amount-str)
+                        str/trim
+                        (str/replace #"[^\d\s/\.]" "")) ; Solo números, espacios, / y .
+          parts (str/split clean-str #"\s+")]
+      
+      (let [result (cond
+                     ;; Caso: "1 1/2" (número entero + fracción)
+                     (and (= (count parts) 2)
+                          (not (str/includes? (first parts) "/"))
+                          (str/includes? (second parts) "/"))
+                     (let [entero (Double/parseDouble (first parts))
+                           [numerador denominador] (str/split (second parts) #"/")]
+                       (+ entero (/ (Double/parseDouble numerador) 
+                                    (Double/parseDouble denominador))))
+                     
+                     ;; Caso: "3/4" (solo fracción)
+                     (and (= (count parts) 1)
+                          (str/includes? (first parts) "/"))
+                     (let [[numerador denominador] (str/split (first parts) #"/")]
+                       (/ (Double/parseDouble numerador) 
+                          (Double/parseDouble denominador)))
+                     
+                     ;; Caso: "1.5" o "2" (decimal o entero)
+                     (= (count parts) 1)
+                     (Double/parseDouble (first parts))
+                     
+                     ;; Caso fallback: intentar primera parte
+                     :else
+                     (Double/parseDouble (first parts)))]
+        result))
+    
+    (catch Exception e 
+      0)))
 
 ;; Detecta ingredientes que deben mantener su unidad original
 (defn should-keep-original-unit? [text unit]
@@ -170,7 +213,7 @@
         cal-per-gram (when type (get calories-per-gram type))]
     
     (let [calories (cond
-                     (or (nil? type) (nil? qty) (zero? qty)) 0
+                     (or (nil? type) (nil? qty) (not (number? qty)) (zero? qty)) 0
                      (nil? cal-per-gram) 0
                      
                      (= unit "g") 
@@ -181,7 +224,7 @@
                                           (< qty 0.3) 0
                                           (< qty 0.7) 0.5
                                           (< qty 1.3) 1
-                                          :else (Math/round qty))]
+                                          :else (Math/round (double qty)))]
                        (* rounded-eggs 78))
                      
                      (contains? #{"tablespoon" "tbsp" "Tbsp"} unit)
@@ -201,7 +244,9 @@
           max-calories-per-ingredient 2000
           final-calories (min calories max-calories-per-ingredient)]
       
-      (if (number? final-calories) (Math/round (double final-calories)) 0))))
+      (if (and (number? final-calories) (not (Double/isNaN final-calories))) 
+          (Math/round (double final-calories)) 
+          0))))
 
 ;; Conversiones de temperatura
 (defn f-to-c [f] (Math/round (double (* (- f 32) (/ 5.0 9)))))
@@ -244,7 +289,7 @@
       (* cantidad factor))
     cantidad))
 
-;; Función principal de conversión de ingredientes
+;; FUNCIÓN PRINCIPAL CORREGIDA: convert-ingredient-struct
 (defn convert-ingredient-struct
   [ingred {:keys [sistema porciones-actuales porciones-nuevas]}]
   (let [amount (if (string? (:quantity ingred))
@@ -258,18 +303,88 @@
         text (:text ingred)]
     
     (cond
-      ;; Sistema cup: mantener unidades originales o convertir g → cup
+      ;; Sistema cup: CORRECCIÓN PRINCIPAL
       (= sistema "cup")
-      (if (and (= unit "g") (get conversion-table type))
+      (cond
+        ;; Si ya está en cups, teaspoons, tablespoons - solo escalar manteniendo unidad
+        (contains? #{"cup" "teaspoon" "tablespoon" "tsp" "tbsp" "Tbsp"} unit)
+        (let [final-quantity (/ (Math/round (* scaled 100.0)) 100.0) ; Solo 2 decimales
+              cleaned-text (-> text
+                               (str/replace #"^cups?\s+" "")
+                               (str/replace #"^cup\s+" "")
+                               (str/replace #"^tablespoons?\s+" "")
+                               (str/replace #"^tablespoon\s+" "")
+                               (str/replace #"^tbsp\.?\s+" "")
+                               (str/replace #"^teaspoons?\s+" "")
+                               (str/replace #"^teaspoon\s+" "")
+                               (str/replace #"^tsp\.?\s+" "")
+                               (str/replace #"\s+cups?\s+" " ")
+                               (str/replace #"\s+cup\s+" " ")
+                               (str/replace #"\s+tablespoons?\s+" " ")
+                               (str/replace #"\s+tablespoon\s+" " ")
+                               (str/replace #"\s+tbsp\.?\s+" " ")
+                               (str/replace #"\s+teaspoons?\s+" " ")
+                               (str/replace #"\s+teaspoon\s+" " ")
+                               (str/replace #"\s+tsp\.?\s+" " ")
+                               (str/replace #"\s+" " ")
+                               str/trim)]
+          (assoc ingred
+                 :quantity final-quantity
+                 :unit (:unit ingred)
+                 :text cleaned-text ; Usar texto limpio
+                 :type type))
+        
+        ;; Si está en gramos, convertir a cups usando tabla
+        (and (= unit "g") (get conversion-table type))
         (let [g (get conversion-table type)
               cups (/ scaled g)
-              cleaned-text (clean-ingredient-text text 'cup)]
+              cleaned-text (clean-ingredient-text text 'cup)
+              final-quantity (/ (Math/round (* cups 1000.0)) 1000.0)]
           (assoc ingred
-                 :quantity (/ (Math/round (* cups 100.0)) 100.0) 
+                 :quantity final-quantity
                  :unit 'cup
                  :text cleaned-text
                  :type type))
-        (assoc ingred :quantity scaled :type type))
+        
+        ;; Para huevos - redondeo especial
+        (or (= type :egg) (re-find #"egg" (str/lower-case (str text))))
+        (let [final-quantity (cond
+                               (< scaled 0.3) 0
+                               (< scaled 0.7) 0.5
+                               (< scaled 1.3) 1
+                               (< scaled 1.7) 1.5
+                               :else (Math/round scaled))
+              clean-text (-> text
+                            (str/replace #"\d+(\.\d+)?\s*" "") ; Remover números existentes
+                            (str/replace #"^\s+" "")          ; Remover espacios al inicio
+                            (str/replace #"eggs" "egg")       ; Normalizar a singular
+                            str/trim)
+              final-text (if (= final-quantity 1)
+                           "egg"
+                           "eggs")]
+          (assoc ingred 
+                 :quantity final-quantity
+                 :text final-text
+                 :type type
+                 :unit nil)) ; Sin unidad para huevos
+        
+        ;; Mantener unidades originales para otros casos
+        :else
+        (let [final-quantity (/ (Math/round (* scaled 100.0)) 100.0) ; Solo 2 decimales
+              cleaned-text (cond
+                             ;; Casos especiales de zest/grated
+                             (re-find #"zest|grated" (str/lower-case text))
+                             (-> text
+                                 (str/replace #"Grated zest of \d+(\.\d+)?\s*" "Grated zest of ")
+                                 (str/replace #"zest of \d+(\.\d+)?\s*" "zest of ")
+                                 (str/replace #"\d+(\.\d+)?\s*zest" "zest")
+                                 str/trim)
+                             ;; Texto normal
+                             :else text)]
+          (assoc ingred 
+                 :quantity final-quantity 
+                 :text cleaned-text
+                 :type type)))
 
       ;; Sistema métrico: conversión completa
       (= sistema "metric")

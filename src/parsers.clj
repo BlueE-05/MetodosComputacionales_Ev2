@@ -128,9 +128,20 @@
       :else nil)
     (catch Exception _ nil)))
 
-; --función que busca y extrae la primera cantidad válida en una lista de palabras--
+; --FUNCIÓN CORREGIDA: busca y extrae la primera cantidad válida en una lista de palabras, incluyendo fracciones mixtas--
 (defn extract-quantity [words]
-  (some parse-quantity words)) ; some aplica parse-quantity a cada elemento y devuelve el primer resultado no-nil
+  (let [first-two (take 2 words)]
+    (cond
+      ;; Caso de fracción mixta como "1 1/2"
+      (and (= (count first-two) 2)
+           (parse-quantity (first first-two))
+           (re-matches #"^\d+/\d+$" (second first-two)))
+      (let [entero (parse-quantity (first first-two))
+            fraccion (parse-quantity (second first-two))]
+        (+ entero fraccion))
+      ;; Caso original
+      :else
+      (some parse-quantity words))))
 
 ; --función que detecta las unidades de medición 'metric o 'cup--
 (defn detect-unit [line]
@@ -158,7 +169,16 @@
                   (let [words (str/split line #"\s+")
                         quantity (extract-quantity words)
                         unit (detect-unit line)
+                        ;; Detectar fracciones mixtas para skip correcto
                         skip (cond
+                               ;; Si hay fracción mixta (ej: "1 1/2 cups"), saltar 3 palabras
+                               (and quantity unit 
+                                    (>= (count words) 3)
+                                    (re-matches #"^\d+$" (first words))
+                                    (re-matches #"^\d+/\d+$" (second words)))
+                               3
+                               
+                               ;; Casos normales
                                (and quantity unit) 2
                                quantity 1
                                :else 0)
