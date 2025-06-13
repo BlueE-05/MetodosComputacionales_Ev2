@@ -172,9 +172,12 @@
   (let [qty (format-quantity (:quantity ingred))
         unit (when (:unit ingred) (str (name (:unit ingred)) " "))
         text (:text ingred)
-        ingredient-str (str (when (not (str/blank? qty)) (str qty " "))
-                            (when unit unit) text)]
-    (format "\t\t\t<div class=\"ingredient\"><strong>%s</strong></div>" (str/trim ingredient-str))))
+        quantity-part (when (not (str/blank? qty)) (str qty " "))
+        unit-part (when unit unit)]
+    (format "\t\t\t<div class=\"ingredient\">%s%s<strong>%s</strong></div>" 
+            (or quantity-part "") 
+            (or unit-part "") 
+            text)))
 
 (defn format-instruction-item [instr]
   (format "\t\t\t<div class=\"instruction\"><strong>%s.</strong> <strong>%s</strong></div>"

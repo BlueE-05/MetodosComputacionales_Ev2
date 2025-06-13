@@ -1,15 +1,14 @@
 (ns convert
   (:require [clojure.string :as str]
-            [parsers :as parsers]))
+            [parsers :as parsers])) ; Importa utilidades de strings y el namespace parsers
 
-;; Funciones de conversión Java→Map con sintaxis correcta Y CORRECCIÓN DE PARSER
+;; Convierte un objeto de ingrediente de Java a un map de Clojure
 (defn java-ingredient-to-map [java-ingred]
-  "Convierte un objeto parsers.Ingredient a map de Clojure Y CORRIGE BUGS DEL PARSER"
+  "Convierte un objeto parsers.Ingredient a map de Clojure"
   (let [original-quantity (:quantity java-ingred)
         original-text (:text java-ingred)
         original-unit (:unit java-ingred)
-        
-        ;; Re-parsear la cantidad desde el texto completo si parece incorrecta
+        ;; Si el texto tiene una fracción mixta (ej. "1 1/2"), la detecta y la convierte a decimal
         corrected-quantity (if (and original-text (string? original-text))
                              ;; Buscar fracciones mixtas en el texto que el parser pudo haber perdido
                              (let [unit-str (if original-unit (name original-unit) "")
@@ -32,12 +31,13 @@
      :text original-text           
      :type (:type java-ingred)}))         
 
+;; Convierte un objeto de instrucción de Java a un map de Clojure
 (defn java-instruction-to-map [java-instr]
   "Convierte un objeto parsers.Instruction a map de Clojure"
   {:step (:step java-instr)           
    :text (:text java-instr)})         
 
-;; Tablas de conversión por tipo de ingrediente
+;; Tabla para convertir de tazas/cucharadas/etc a gramos según el tipo de ingrediente
 (def conversion-table
   {:oil         218
    :spice       288
@@ -56,6 +56,7 @@
    :grated      5
    :egg         50})
 
+;; Tabla de calorías por gramo para cada tipo de ingrediente
 (def calories-per-gram
   {:oil         9.0
    :spice       0.0
@@ -93,7 +94,7 @@
       (re-find #"parsley|herb" text-lower) :vegetable
       :else nil)))
 
-;; Convierte string de cantidad a número, manejando fracciones
+;; Parsea cantidades tipo "1 1/2", "3/4", "2", etc. a número decimal
 (defn parse-amount [amount-str]
   (try
     (let [clean-str (-> (str amount-str)
@@ -102,7 +103,6 @@
           parts (str/split clean-str #"\s+")]
       
       (let [result (cond
-                     ;; Caso: "1 1/2" (número entero + fracción)
                      (and (= (count parts) 2)
                           (not (str/includes? (first parts) "/"))
                           (str/includes? (second parts) "/"))
@@ -130,7 +130,7 @@
     (catch Exception e 
       0)))
 
-;; Detecta ingredientes que deben mantener su unidad original
+;; Decide si un ingrediente debe mantener su unidad original (ej. huevos, cucharadas)
 (defn should-keep-original-unit? [text unit]
   (let [text-lower (str/lower-case (str text))]
     (or
@@ -138,28 +138,22 @@
       (re-find #"egg|huevo" text-lower)
       (= unit "pinch"))))
 
-;; Detecta casos especiales en el texto para conversión directa
+;; Detecta casos especiales en el texto para conversión directa (ej. pounds, ounces)
 (defn detect-special-cases [text scaled]
   (let [text-lower (str/lower-case (str text))]
     (cond
       (re-find #"lbs?|pounds?" text-lower)
       {:quantity (* scaled 453.6) :unit 'g :type "detected-lbs"}
-      
       (re-find #"ounces?" text-lower)
       {:quantity (* scaled 28.35) :unit 'g :type "detected-oz"}
-      
       (re-find #"tbsp|tablespoons?" text-lower)
       {:quantity (* scaled 14.8) :unit 'g :type "detected-tbsp"}
-      
       (re-find #"pints?" text-lower)
       {:quantity (* scaled 473.2) :unit 'g :type "detected-pint"}
-      
       (re-find #"cloves?" text-lower)
       {:quantity (* scaled 3) :unit 'g :type "detected-cloves"}
-      
       (re-find #"sprig" text-lower)
       {:quantity (* scaled 2) :unit 'g :type "detected-sprig"}
-      
       :else nil)))
 
 ;; Detecta si debe usar conversión como items individuales
@@ -202,7 +196,7 @@
         str/trim)
     text))
 
-;; Estima las calorías de un ingrediente
+;; Estima las calorías de un ingrediente usando la tabla y la unidad
 (defn estimate-calories [ingred]
   (let [qty (:quantity ingred)
         unit (when (:unit ingred) (name (:unit ingred)))
@@ -248,15 +242,15 @@
           (Math/round (double final-calories)) 
           0))))
 
-;; Conversiones de temperatura
+;; Conversiones de temperatura entre F y C
 (defn f-to-c [f] (Math/round (double (* (- f 32) (/ 5.0 9)))))
 (defn c-to-f [c] (Math/round (double (+ (* c (/ 9.0 5)) 32))))
 
 ;; Convierte diferencias de temperatura (sin restar 32)
-(defn f-diff-to-c-diff [f-diff] 
+(defn f-diff-to-c-diff [f-diff]
   (Math/round (double (* f-diff (/ 5.0 9)))))
 
-;; Convierte temperaturas en texto
+;; Convierte temperaturas en texto (ej. "350 F" a "180 C")
 (defn convert-temp-text [text target-unit]
   (let [pattern (get parsers/regex "temperature")
         degrees-pattern #"(\d+)(?:-(\d+))?\s+degrees?"]
@@ -282,14 +276,14 @@
                 (let [t (f-diff-to-c-diff (Integer/parseInt temp1))]
                   (str t " degrees C")))))))))
 
-;; Escala una cantidad proporcionalmente
+;; Escala una cantidad proporcionalmente según las porciones
 (defn scale-quantity [cantidad actuales nuevas]
   (if (and (number? cantidad) (number? actuales) (number? nuevas) (pos? actuales))
     (let [factor (/ nuevas actuales)]
       (* cantidad factor))
     cantidad))
 
-;; FUNCIÓN PRINCIPAL CORREGIDA: convert-ingredient-struct
+;; Convierte un ingrediente a la estructura deseada y sistema de unidades
 (defn convert-ingredient-struct
   [ingred {:keys [sistema porciones-actuales porciones-nuevas]}]
   (let [amount (if (string? (:quantity ingred))
@@ -614,37 +608,33 @@
                       (:instructions recipe))]
     (assoc recipe :instructions analyzed)))
 
-;; FUNCIÓN PRINCIPAL CORREGIDA: convert-recipe
+;; Función principal: convierte una receta completa a la configuración deseada
 (defn convert-recipe
   [recipe {:keys [sistema porciones-actuales porciones-nuevas temperature-unit]}]
-  
-  ;; PASO 1: Convertir ingredientes e instrucciones de Java objects a maps
+  ;; PASO 1: Convierte ingredientes e instrucciones de Java objects a maps
   (let [ingredients-as-maps (map java-ingredient-to-map (:ingredients recipe))
         instructions-as-maps (map java-instruction-to-map (:instructions recipe))
-        
-        ;; PASO 2: Crear receta temporal con maps
-        recipe-with-maps (assoc recipe 
+        ;; PASO 2: Crea receta temporal con maps
+        recipe-with-maps (assoc recipe
                                :ingredients ingredients-as-maps
                                :instructions instructions-as-maps)
-        
-        ;; PASO 3: Aplicar conversiones a los maps
+        ;; PASO 3: Aplica conversiones a los ingredientes
         converted-ingredients
         (map #(convert-ingredient-struct %
                  {:sistema sistema
                   :porciones-actuales porciones-actuales
                   :porciones-nuevas porciones-nuevas})
              ingredients-as-maps)
-
-        ;; PASO 4: Construir receta final
+        ;; PASO 4: Construye receta final con ingredientes convertidos y unidades de temperatura
         updated-recipe
         (assoc recipe-with-maps
                :ingredients converted-ingredients
                :servings porciones-nuevas
                :temperature-unit (keyword temperature-unit))
-
+        ;; PASO 5: Calcula calorías totales y por porción
         recipe-with-calories
         (update-metadata-with-calories updated-recipe)
-
+        ;; PASO 6: Analiza instrucciones para detectar temperaturas e ingredientes
         final-recipe
         (analyze-instructions recipe-with-calories)]
 

@@ -102,7 +102,7 @@
            (apply concat)
            vec))))
 
-; -- Helper function to ensure recipe has required fields --
+; -- Función auxiliar para asegurar que la receta tenga los campos requeridos --
 (defn ensure-recipe-structure [recipe]
   "Asegura que la receta tenga los campos esenciales con valores por defecto."
   (-> recipe
@@ -120,7 +120,7 @@
                 (not (str/blank? (str (:text %)))))
           ingredientes))
 
-; --función mejorada para procesar una sola receta--
+; --función para procesar una sola receta--
 (defn procesar-receta [receta config]
   "Procesa una receta aplicando conversiones de sistema, temperatura y porciones."
   (try
